@@ -22,4 +22,6 @@ Few things to pass on:
 
 - 309 — the guy with the deposit issue from Tuesday is still not settled, he came in very late and I didn't want to chase him at 2am. Still no deposit on file. Passing it on again.
 
+- Did my rounds on the 2nd floor and noticed 205 had the door ajar, bed clearly not slept in, no luggage anywhere in the room. The system still shows Mr Chen in 205 as in-house, but it looks like nobody's been in there for a day or two. Flagging in case he checked out early and it never got recorded — someone should reconcile this before we keep billing him for the room.
+
 That's it from me. Coffee machine in the back is acting up too but that's a daytime problem.
