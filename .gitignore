@@ -35,3 +35,4 @@ pnpm-debug.log*
 .cache/
 tmp/
 *.local
+.vercel
