@@ -161,6 +161,72 @@ hand-written negation regex to get this right.
 
 ---
 
+## The timezone bug: a coincidence that looked like correctness
+
+`shiftDateFromTimestamp` originally computed a shift's date using
+`getHours()` and `toISOString()` on a JS `Date` object. Both of those
+methods are timezone-sensitive in ways that don't match what the
+function actually needed:
+
+- `getHours()` returns the hour in the *server's local timezone*, not
+  the hour encoded in the timestamp's own offset.
+- `toISOString()` always converts to UTC before formatting the date.
+
+Every timestamp in `events.json` carries a `+08:00` offset. My local
+machine is also `+08:00`. That meant both bugs happened to cancel out on
+my machine — the wrong calculation produced the right-looking answer,
+every single time I tested it locally. It was never actually correct;
+it was coincidentally close enough that nothing I checked locally could
+have caught it.
+
+The moment the same code ran on Vercel — UTC by default — the
+coincidence broke. `23:40+08:00` parsed as hour 15 on a UTC server,
+missing the late-night threshold that shifts a timestamp into the next
+shift's date. Separately, `toISOString().slice(0,10)` was pulling some
+early-morning `+08:00` timestamps onto the *previous* UTC calendar
+date — for example, `2026-05-30T01:30:00+08:00` was being dated
+`2026-05-29`, which meant May 30 events were silently leaking into the
+May 29 handover, on both machines, the entire time. Deploying to a
+different timezone didn't introduce this bug — it just removed the
+coincidence that had been hiding it.
+
+The fix parses the date and hour directly from the ISO string's own
+offset, rather than asking a `Date` object to reinterpret it through
+whatever timezone happens to be running the process.
+
+After the fix, I re-checked every thread I'd previously verified by
+hand rather than assuming "local now matches deployed" meant everything
+upstream was still correct:
+
+- **`evt_0026` (prompt-injection firewall):** still flagged correctly
+  with both `guest_supplied_content` and `suspicious_instruction_pattern`,
+  status still `pending`, category still `guest_message` — it simply
+  moved to the May 30 handover instead of May 29, because that's the
+  shift it actually happened on. The firewall property held; only the
+  date assignment changed, which is exactly what fixing a date bug
+  should do.
+- **Corridor leak thread:** unchanged — still correctly resolves to
+  `newly_resolved` on May 29, across all three sourceRefs (JSON open →
+  markdown update → JSON resolution).
+- **Room 112 cross-format gap:** the markdown-side event now sits on
+  its correct date and correctly carries forward across nights — it
+  shows as `new_tonight` on May 28 and `still_open` on May 29, proving
+  the across-*night* reconciliation logic works. It still never merges
+  with the JSON-side room 112 thread, because the free-text event has
+  no extractable room field — across-*format* reconciliation remains a
+  known, documented gap, unaffected by this fix.
+
+The lesson, stated plainly: "it works on my machine" is a specifically
+dangerous signal when the logic in question is timezone-sensitive,
+because a developer's local timezone can quietly cancel out a real bug
+instead of exposing it. A handover service meant to run "unattended
+across hundreds of hotels" — almost certainly across multiple
+timezones — would have shipped this exact bug with every local test
+passing, and only discovered it from a hotel manager reading a handover
+with the wrong night's events in it. Deploying to a server in a
+different timezone than my dev machine is what surfaced this, not any
+test I wrote.
+
 ## How I keep every statement grounded, and handle incomplete/contradictory input
 
 Every event leaving `ingest/` carries a `sourceRef`. Nothing in the
