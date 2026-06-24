@@ -36,15 +36,24 @@ const TYPE_TO_CATEGORY = {
  * A night shift runs 23:00–07:00 and "belongs to" the morning date.
  * Events at 23:xx on date D are part of the shift that ends on D+1.
  * Events at 00:xx–22:xx on date D belong to that same D.
+ *
+ * Parse date and hour directly from the ISO string rather than using
+ * Date methods — getHours() returns local-machine hours, which differs
+ * between a +08:00 dev machine and a UTC Vercel runtime.
  */
 function shiftDateFromTimestamp(isoTimestamp) {
-  const d = new Date(isoTimestamp);
-  if (d.getHours() >= 23) {
-    const next = new Date(d);
-    next.setDate(next.getDate() + 1);
-    return next.toISOString().slice(0, 10);
+  // Timestamps are in the form "2026-05-26T00:20:00+08:00"
+  // Extract the date portion and hour directly from the string.
+  const datePart = isoTimestamp.slice(0, 10);          // "2026-05-26"
+  const hour     = parseInt(isoTimestamp.slice(11, 13), 10); // 0–23
+
+  if (hour >= 23) {
+    // Shift belongs to the next calendar day
+    const d = new Date(datePart + "T12:00:00Z"); // noon UTC — safe from DST edge cases
+    d.setUTCDate(d.getUTCDate() + 1);
+    return d.toISOString().slice(0, 10);
   }
-  return d.toISOString().slice(0, 10);
+  return datePart;
 }
 
 function normalizeEvent(raw, hotelId) {
